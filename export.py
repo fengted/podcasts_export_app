@@ -6,7 +6,8 @@
 #
 #  Modified by: Ted Feng, 2024/06/26
 #  1. Add ttml export
-#  2. Add txt export, converted from ttml 
+#  2. Add txt convert from ttml 
+#  3. Add srt convert from ttml
 #
 #  export.py: reads list of available episodes from Podcasts.app database, 
 #             copies downloaded episodes to specified folder.
@@ -45,8 +46,15 @@ def get_db_path():
     return os.path.expanduser(
         "~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Documents/MTLibrary.sqlite")
 
-def export_ttml(ttml):
-    source_ttml = os.path.expanduser(os.path.join("~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Library/Cache/Assets/TTML/", ttml))
+def format_time(time_str):
+    parts = time_str.split(':')
+    ss = parts[-1]
+    mm = parts[-2] if len(parts) > 1 else '00'
+    hh = parts[-3] if len(parts) > 2 else '00'
+    return f"{hh}:{mm}:{ss}"
+
+
+
     
 
 
@@ -104,14 +112,14 @@ def export(episodes, output_dir, set_progress=None, emit_message=print):
         mp3.tags['title'] = title
         mp3.save()
 
-# Process ttml file        
+# copy ttml file        
         basename = os.path.basename(zttml).replace('transcript_', '')
         source_ttml = os.path.expanduser(os.path.join("~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Library/Cache/Assets/TTML/", zttml+'-'+basename))
         dest_ttml = os.path.join(podcast_path,
                                  u"{:%Y.%m.%d}-{}-({}){}".format(pubdate, safe_title[0:140], safe_author[0:100], '.ttml'))
         shutil.copy(source_ttml, dest_ttml)
 
-# convert ttml file to txt
+# convert ttml to txt
         dest_txt = os.path.join(podcast_path,
                                  u"{:%Y.%m.%d}-{}-({}){}".format(pubdate, safe_title[0:140], safe_author[0:100], '.txt'))
         try:
@@ -134,6 +142,43 @@ def export(episodes, output_dir, set_progress=None, emit_message=print):
             if file_txt:
                 file_txt.close()
 
+
+# convert ttml to srt, group by sentense
+
+        # delete empty line
+        tmp_str = re.sub(r'^$', '', str_ttml)
+        # remove word span tags
+        tmp_str = re.sub(r'<span[^>]+word">([^<]+)</span>', r'\1 ', tmp_str)
+        # break line after sentense </span>
+        tmp_str = re.sub(r'</span>', '</span>\n', tmp_str)
+        #remove tags except span
+        tmp_str = re.sub(r'<(head|/head|metadata|p|/p|tt|/tt|body|/body|div|/div)[^>]*>', r'', tmp_str)
+
+        # delete empty line
+        tmp_str = re.sub(r'^\s*$', '', tmp_str)
+
+        lines = tmp_str.split('\n')
+        out_str = ''
+
+        i = 1
+        for line in lines:
+            if len(line) > 3:
+                tmp_str = re.sub(r'<span begin="([\d:]+).(\d{3})" end="([\d:]+).(\d{3})" podcasts:unit="sentence">([^<]+)</span>',r'\1||\2||\3||\4||\5',line)
+                (begin, begin_ms, end, end_ms, sentense) = tmp_str.split('||')
+                begin = format_time(begin)
+                end = format_time(end)
+                tmp_str = f"{i}\n{begin},{begin_ms} --> {end},{end_ms}\n{sentense}\n\n"
+                out_str = out_str + tmp_str
+                i = i + 1
+
+        dest_srt = os.path.join(podcast_path,
+                                 u"{:%Y.%m.%d}-{}-({}){}".format(pubdate, safe_title[0:140], safe_author[0:100], '.srt'))
+        try:
+            file_srt = open(dest_srt, 'w')
+            file_srt.write(out_str)
+        finally:
+            if file_srt:
+                file_srt.close()
 
 # This provides a very basic but functional Command Line Interface with
 # 'mutagen' as the only dependency
