@@ -70,6 +70,8 @@ def export(episodes, output_dir, set_progress=None, emit_message=print):
 
         safe_title = title.replace('/', '|').replace(':', ',')
         safe_podcast = podcast.replace('/', '|').replace(':', ',')
+        if not author:
+            author = 'no author'
         safe_author = author.replace('/', '|').replace(':', ',')
         pubdate = datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=zpubdate)
 
@@ -111,6 +113,11 @@ def export(episodes, output_dir, set_progress=None, emit_message=print):
         mp3.tags['album'] = podcast
         mp3.tags['title'] = title
         mp3.save()
+
+
+# skip ttml process if no ttml defined
+        if not zttml:
+            continue
 
 # copy ttml file        
         basename = os.path.basename(zttml).replace('transcript_', '')
@@ -163,7 +170,7 @@ def export(episodes, output_dir, set_progress=None, emit_message=print):
         i = 1
         for line in lines:
             if len(line) > 3:
-                tmp_str = re.sub(r'<span begin="([\d:]+).(\d{3})" end="([\d:]+).(\d{3})" podcasts:unit="sentence">([^<]+)</span>',r'\1||\2||\3||\4||\5',line)
+                tmp_str = re.sub(r'<span begin="([\d:]+).(\d{3})" end="([\d:]+).(\d{3})"[^<]+>([^<]+)</span>',r'\1||\2||\3||\4||\5',line)
                 (begin, begin_ms, end, end_ms, sentense) = tmp_str.split('||')
                 begin = format_time(begin)
                 end = format_time(end)
